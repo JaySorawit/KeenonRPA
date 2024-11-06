@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">RPA_AccessibilityService</string>
+    <string name="accessibility_service_description">This service helps automate tasks by controlling other apps.</string>
+</resources>
