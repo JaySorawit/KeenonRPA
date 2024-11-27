@@ -27,7 +27,7 @@ class MyAccessibilityService : AccessibilityService() {
         Thread {
             try {
                 // กำหนด IP Address ของ Raspberry Pi
-                socket = Socket("172.20.10.2", 12345)
+                socket = Socket("192.168.1.41", 12345)
                 Log.d("AccessibilityService", "Socket created")
 
                 socket?.getOutputStream()?.let {
