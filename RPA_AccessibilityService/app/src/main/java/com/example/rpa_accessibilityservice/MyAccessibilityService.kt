@@ -114,6 +114,7 @@ class MyAccessibilityService : AccessibilityService() {
 
         if (targetNode != null) {
             // Log the node regardless of visibility
+            logNode(targetNode)
 
             // Perform action if node is clickable
             if (targetNode.isClickable) {
@@ -136,6 +137,16 @@ class MyAccessibilityService : AccessibilityService() {
             Log.e("AccessibilityService", "Command not found in UI: $command")
             sendResponse("Command not found in UI: $command")
         }
+    }
+
+    // Log the node regardless of visibility
+    private fun logNode(node: AccessibilityNodeInfo) {
+        Log.d("AccessibilityService",
+            "Node Text: ${node.text} | " +
+                    "Class: ${node.className} | " +
+                    "Clickable: ${node.isClickable} | " +
+                    "Visible: ${node.isVisibleToUser} |" +
+                    "Scrollable: ${node.isScrollable}")
     }
 
     // If want to click only UI visible to user
