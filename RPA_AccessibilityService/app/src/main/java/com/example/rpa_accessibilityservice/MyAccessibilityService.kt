@@ -63,19 +63,59 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun logFullHierarchy(node: AccessibilityNodeInfo?, depth: Int = 0) {
-        if (node == null) return
+        if (node == null) {
+            Log.e("UIHierarchy", "Node is null at depth $depth")
+            return
+        }
+
         val prefix = " ".repeat(depth * 2)
-        Log.d("UIHierarchy", "$prefix Node: ${node.className}, Text: ${node.text}, Clickable: ${node.isClickable}, Visible: ${node.isVisibleToUser}")
+        Log.d(
+            "UIHierarchy",
+            "$prefix Node: ${node.className}," +
+                    "Text: ${node.text}," +
+                    "Clickable: ${node.isClickable}," +
+                    "Visible: ${node.isVisibleToUser}," +
+                    "Children: ${node.childCount}," +
+                    "Scrollable: ${node.isScrollable}"
+        )
+
         for (i in 0 until node.childCount) {
-            logFullHierarchy(node.getChild(i), depth + 1)
+            val child = node.getChild(i)
+            if (child == null) {
+                Log.e("UIHierarchy", "$prefix Child at index $i is null.")
+                continue
+            }
+            logFullHierarchy(child, depth + 1)
         }
     }
 
-    private fun findAndPerformAction(rootNode: AccessibilityNodeInfo, command: String) {
-        val nodes = rootNode.findAccessibilityNodeInfosByText(command)
-        if (nodes.isNotEmpty()) {
-            val targetNode = nodes[0]
+    private fun findNodeByPartialText(rootNode: AccessibilityNodeInfo, keyword: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(rootNode)
 
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+
+            // Match text partially
+            if (node.text?.contains(keyword, true) == true || node.contentDescription?.contains(keyword, true) == true) {
+                return node
+            }
+
+            // Add children to the queue
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        return null
+    }
+
+    private fun findAndPerformAction(rootNode: AccessibilityNodeInfo, command: String) {
+        val targetNode = findNodeByPartialText(rootNode, command)
+
+        if (targetNode != null) {
+            // Log the node regardless of visibility
+
+            // Perform action if node is clickable
             if (targetNode.isClickable) {
                 targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 sendResponse("Command executed: $command")
@@ -94,9 +134,9 @@ class MyAccessibilityService : AccessibilityService() {
             }
         } else {
             Log.e("AccessibilityService", "Command not found in UI: $command")
+            sendResponse("Command not found in UI: $command")
         }
     }
-
 
     // If want to click only UI visible to user
     private fun findAndPerformActionV2(rootNode: AccessibilityNodeInfo, command: String) {
