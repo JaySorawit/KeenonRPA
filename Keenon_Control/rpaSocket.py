@@ -50,7 +50,7 @@ def handle_client(client_socket):
             if response:
                 print(f"Response from Android: {response}")
 
-            time.sleep(1)  # Short delay between commands (you can adjust this)
+            time.sleep(1)  # Short delay between commands
 
     except Exception as e:
         print(f"Error handling client: {e}")
