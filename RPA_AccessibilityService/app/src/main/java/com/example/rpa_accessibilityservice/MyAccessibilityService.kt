@@ -1,9 +1,6 @@
 package com.example.rpa_accessibilityservice
 
 import android.accessibilityservice.AccessibilityService
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -17,84 +14,42 @@ class MyAccessibilityService : AccessibilityService() {
     private var socket: Socket? = null
     private var writer: PrintWriter? = null
     private var reader: BufferedReader? = null
-    private var isRunning = false
-
-    private val disconnectReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.example.rpa_accessibilityservice.DISCONNECT") {
-                closeConnection()
-            }
-        }
-    }
+    private val serverIp = "192.168.1.41" // Replace with Raspberry Pi IP
+    private val serverPort = 12345
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        isRunning = true
-
-        // Retrieve IP and Port from SharedPreferences
-        val sharedPreferences = getSharedPreferences("RPA_PREFS", Context.MODE_PRIVATE)
-        val serverIp = sharedPreferences.getString("IP", null)
-        val serverPort = sharedPreferences.getInt("PORT", -1)
-
-        if (serverIp != null && serverPort != -1) {
-            connectToServer(serverIp, serverPort)
-        } else {
-            Log.e("AccessibilityService", "IP or Port not found in SharedPreferences")
-        }
+        connectToServer()
     }
 
-    private fun connectToServer(ip: String, port: Int) {
+    private fun connectToServer() {
         Thread {
             try {
-                socket = Socket(ip, port)
+                socket = Socket(serverIp, serverPort)
                 writer = PrintWriter(BufferedWriter(OutputStreamWriter(socket?.getOutputStream())), true)
                 reader = BufferedReader(InputStreamReader(socket?.getInputStream()))
-                Log.d("AccessibilityService", "Connected to server: $ip:$port")
 
-                // Read and handle commands
-                while (isRunning) {
-                    val command = reader?.readLine()
-                    if (command != null) {
-                        Log.d("AccessibilityService", "Received command: $command")
-                        handleCommand(command)
-                    } else {
-                        Log.d("AccessibilityService", "No command received. Closing connection.")
-                        break
-                    }
+                Log.d("AccessibilityService", "Connected to server: $serverIp:$serverPort")
+
+                var command: String?
+                while (reader?.readLine().also { command = it } != null) {
+                    Log.d("AccessibilityService", "Received command: $command")
+                    handleCommand(command!!)
                 }
-            } catch (e: IOException) {
+            } catch (e: Exception) {
                 Log.e("AccessibilityService", "Connection error: ${e.message}")
-            } finally {
-                closeConnection() // Ensure the socket is closed on error or disconnect
             }
         }.start()
     }
 
     private fun closeConnection() {
         try {
-            isRunning = false
             reader?.close()
             writer?.close()
             socket?.close()
-            socket = null
-            Log.d("AccessibilityService", "Disconnected from server")
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             Log.e("AccessibilityService", "Error closing connection: ${e.message}")
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        closeConnection()
-        Log.d("AccessibilityService", "Service destroyed")
-    }
-
-    override fun onInterrupt() {
-        closeConnection()
-    }
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Not used for this implementation
     }
 
     private fun handleCommand(command: String) {
@@ -231,5 +186,13 @@ class MyAccessibilityService : AccessibilityService() {
                 Log.e("AccessibilityService", "Error sending response: ${e.message}")
             }
         }.start()
+    }
+
+    override fun onInterrupt() {
+        closeConnection()
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Not used for this implementation
     }
 }
