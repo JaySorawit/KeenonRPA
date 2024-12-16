@@ -19,14 +19,6 @@ class MyAccessibilityService : AccessibilityService() {
     private var reader: BufferedReader? = null
     private var isRunning = false
 
-    private val disconnectReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.example.rpa_accessibilityservice.DISCONNECT") {
-                closeConnection()
-            }
-        }
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         isRunning = true
@@ -99,13 +91,35 @@ class MyAccessibilityService : AccessibilityService() {
 
     private fun handleCommand(command: String) {
         Thread {
-            val rootNode = rootInActiveWindow ?: return@Thread
-            logFullHierarchy(rootNode) // Log UI hierarchy for debugging
-            Handler(Looper.getMainLooper()).post {
-                findAndPerformAction(rootNode, command)
+            val rootNode = rootInActiveWindow
+            if (rootNode == null) {
+                sendResponse("No active window found.")
+                return@Thread
+            }
+
+            when (command) {
+                "getFullUI" -> {
+                    val hierarchy = buildFullHierarchy(rootNode)
+                    sendLargeResponse(hierarchy)  // Send FullHierarchy to Python server
+                }
+                "clickBackButton" -> {
+                    clickBackButton(rootNode) // Handle back button click
+                }
+                else -> {
+                    // Default behavior for finding and performing action
+                    findAndPerformActionOnMainThread(rootNode, command)
+                }
             }
         }.start()
     }
+
+    // Helper to find and perform action on the main thread
+    private fun findAndPerformActionOnMainThread(rootNode: AccessibilityNodeInfo, command: String) {
+        Handler(Looper.getMainLooper()).post {
+            findAndPerformAction(rootNode, command)
+        }
+    }
+
 
     private fun logFullHierarchy(node: AccessibilityNodeInfo?, depth: Int = 0) {
         if (node == null) {
@@ -133,6 +147,26 @@ class MyAccessibilityService : AccessibilityService() {
             logFullHierarchy(child, depth + 1)
         }
     }
+
+    private fun buildFullHierarchy(node: AccessibilityNodeInfo?, depth: Int = 0, sb: StringBuilder = StringBuilder()): String {
+        if (node == null) return sb.toString()
+
+        val prefix = " ".repeat(depth * 2)
+        sb.append(
+            "$prefix Node: ${node.className}," +
+                    " Text: ${node.text}," +
+                    " Clickable: ${node.isClickable}," +
+                    " Visible: ${node.isVisibleToUser}," +
+                    " Children: ${node.childCount}," +
+                    " Scrollable: ${node.isScrollable}\n"
+        )
+
+        for (i in 0 until node.childCount) {
+            buildFullHierarchy(node.getChild(i), depth + 1, sb)
+        }
+        return sb.toString()
+    }
+
 
     private fun findNodeByPartialText(rootNode: AccessibilityNodeInfo, keyword: String): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
@@ -165,6 +199,10 @@ class MyAccessibilityService : AccessibilityService() {
             if (targetNode.isClickable) {
                 targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 sendResponse("Command executed: $command")
+
+                // send FullHierarchy after Click
+                val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
+                sendResponse("Updated UI Hierarchy:\n$updatedHierarchy")
             } else {
                 // Traverse up the hierarchy to find a clickable parent
                 var parentNode = targetNode.parent
@@ -172,6 +210,10 @@ class MyAccessibilityService : AccessibilityService() {
                     if (parentNode.isClickable) {
                         parentNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                         sendResponse("Command executed: $command via parent node")
+
+                        // send FullHierarchy after Click
+                        val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
+                        sendResponse("Updated UI Hierarchy:\n$updatedHierarchy")
                         return
                     }
                     parentNode = parentNode.parent
@@ -221,6 +263,33 @@ class MyAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun clickBackButton(rootNode: AccessibilityNodeInfo) {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(rootNode)
+
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+
+            // check clickable ImageButton
+            if (node.className == "android.widget.ImageButton" && node.isClickable) {
+                Log.d("AccessibilityService", "Found ImageButton, performing click...")
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+
+                // send FullHierarchy after
+                val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
+                sendResponse("Clicked Back Button.\nUpdated UI Hierarchy:\n$updatedHierarchy")
+                return
+            }
+
+            // add node into queue
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        Log.e("AccessibilityService", "Back Button (ImageButton) not found.")
+        sendResponse("Back Button (ImageButton) not found.")
+    }
+
     private fun sendResponse(response: String) {
         Thread {
             try {
@@ -231,5 +300,34 @@ class MyAccessibilityService : AccessibilityService() {
                 Log.e("AccessibilityService", "Error sending response: ${e.message}")
             }
         }.start()
+    }
+
+    private fun sendLargeResponse(response: String) {
+        val chunkSize = 4000  // Maximum logcat size is approximately 4KB.
+        var index = 0
+        while (index < response.length) {
+            val chunk = response.substring(index, minOf(index + chunkSize, response.length))
+
+            // Log each chunk to Logcat
+            Log.d("AccessibilityService", "Response Chunk: $chunk")
+
+            // Send each chunk over the socket
+            sendResponseToSocket(chunk)
+            index += chunkSize
+        }
+        sendResponseToSocket("[END]")  // Signal the end of the message.
+    }
+
+    // Helper function to send data over the socket
+    private fun sendResponseToSocket(chunk: String) {
+        try {
+            socket?.getOutputStream()?.let { outputStream ->
+                outputStream.write((chunk + "\n").toByteArray())
+                outputStream.flush()
+            }
+            Log.d("AccessibilityService", "Chunk sent: $chunk")
+        } catch (e: Exception) {
+            Log.e("AccessibilityService", "Error sending chunk: ${e.message}")
+        }
     }
 }
