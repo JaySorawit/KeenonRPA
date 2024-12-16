@@ -3,6 +3,7 @@ import time
 
 def start_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow port reuse
     server_socket.bind(('0.0.0.0', 12345))  # Listen on all available interfaces
     server_socket.listen(1)
     
