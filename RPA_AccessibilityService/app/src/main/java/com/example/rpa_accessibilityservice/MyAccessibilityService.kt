@@ -1,9 +1,7 @@
 package com.example.rpa_accessibilityservice
 
 import android.accessibilityservice.AccessibilityService
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -98,6 +96,8 @@ class MyAccessibilityService : AccessibilityService() {
             }
 
             when (command) {
+                "goHome", "goBack", "showRecents" -> performGlobalActionByCommand(command)
+                "swipeUp", "swipeDown", "swipeLeft", "swipeRight" -> performGestureByCommand(command)
                 "getFullUI" -> {
                     val hierarchy = buildFullHierarchy(rootNode)
                     sendLargeResponse(hierarchy)  // Send FullHierarchy to Python server
@@ -105,12 +105,31 @@ class MyAccessibilityService : AccessibilityService() {
                 "clickBackButton" -> {
                     clickBackButton(rootNode) // Handle back button click
                 }
-                else -> {
-                    // Default behavior for finding and performing action
-                    findAndPerformActionOnMainThread(rootNode, command)
-                }
+                // Default behavior for finding and performing action
+                else -> findAndPerformActionOnMainThread(rootNode, command)
             }
         }.start()
+    }
+
+    private fun performGlobalActionByCommand(command: String) {
+        when (command) {
+            "goHome" -> {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                sendResponse("Performed action: Home")
+            }
+            "goBack" -> {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                sendResponse("Performed action: Back")
+            }
+            "showRecents" -> {
+                performGlobalAction(GLOBAL_ACTION_RECENTS)
+                sendResponse("Performed action: Show Recent Apps")
+            }
+            else -> {
+                Log.e("AccessibilityService", "Invalid global action command: $command")
+                sendResponse("Invalid global action command: $command")
+            }
+        }
     }
 
     // Helper to find and perform action on the main thread
@@ -175,8 +194,9 @@ class MyAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
 
-            // Match text partially
-            if (node.text?.contains(keyword, true) == true || node.contentDescription?.contains(keyword, true) == true) {
+            // use If want sensitive case
+            // if (node.text?.contains(keyword, true) == true || node.contentDescription?.contains(keyword, true) == true) {
+            if (node.text?.equals(keyword) == true) {
                 return node
             }
 
@@ -201,8 +221,8 @@ class MyAccessibilityService : AccessibilityService() {
                 sendResponse("Command executed: $command")
 
                 // send FullHierarchy after Click
-                val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
-                sendResponse("Updated UI Hierarchy:\n$updatedHierarchy")
+                // val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
+                // sendResponse("Updated UI Hierarchy:\n$updatedHierarchy")
             } else {
                 // Traverse up the hierarchy to find a clickable parent
                 var parentNode = targetNode.parent
@@ -212,8 +232,8 @@ class MyAccessibilityService : AccessibilityService() {
                         sendResponse("Command executed: $command via parent node")
 
                         // send FullHierarchy after Click
-                        val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
-                        sendResponse("Updated UI Hierarchy:\n$updatedHierarchy")
+                        //  val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
+                        //  sendResponse("Updated UI Hierarchy:\n$updatedHierarchy")
                         return
                     }
                     parentNode = parentNode.parent
@@ -276,8 +296,8 @@ class MyAccessibilityService : AccessibilityService() {
                 node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
                 // send FullHierarchy after
-                val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
-                sendResponse("Clicked Back Button.\nUpdated UI Hierarchy:\n$updatedHierarchy")
+                // val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
+                // sendResponse("Clicked Back Button.\nUpdated UI Hierarchy:\n$updatedHierarchy")
                 return
             }
 
@@ -288,6 +308,32 @@ class MyAccessibilityService : AccessibilityService() {
         }
         Log.e("AccessibilityService", "Back Button (ImageButton) not found.")
         sendResponse("Back Button (ImageButton) not found.")
+    }
+
+    private fun performSwipeGesture(startX: Int, startY: Int, endX: Int, endY: Int, duration: Long) {
+        try {
+            val command = "input swipe $startX $startY $endX $endY $duration"
+            val process = Runtime.getRuntime().exec(command)
+            process.waitFor()
+
+            if (process.exitValue() == 0) {
+                sendResponse("Swipe gesture completed")
+            } else {
+                sendResponse("Swipe gesture failed with exit code: ${process.exitValue()}")
+            }
+        } catch (e: Exception) {
+            sendResponse("Error executing swipe command: ${e.message}")
+        }
+    }
+
+    private fun performGestureByCommand(command: String) {
+        when (command) {
+            "swipeUp" -> performSwipeGesture(500, 1500, 500, 500, 500L) // Swipe up
+            "swipeDown" -> performSwipeGesture(500, 500, 500, 1500, 500L) // Swipe down
+            "swipeLeft" -> performSwipeGesture(500, 1000, 100, 1000, 500L) // Swipe left
+            "swipeRight" -> performSwipeGesture(100, 1000, 500, 1000, 500L) // Swipe right
+            else -> sendResponse("Invalid gesture command: $command")
+        }
     }
 
     private fun sendResponse(response: String) {
@@ -303,26 +349,21 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun sendLargeResponse(response: String) {
-        val chunkSize = 4000  // Maximum logcat size is approximately 4KB.
+        val chunkSize = 4000  // 4KB chunk size
         var index = 0
         while (index < response.length) {
             val chunk = response.substring(index, minOf(index + chunkSize, response.length))
-
-            // Log each chunk to Logcat
-            Log.d("AccessibilityService", "Response Chunk: $chunk")
-
-            // Send each chunk over the socket
-            sendResponseToSocket(chunk)
+            sendResponseToSocket(chunk)  // Send the chunk
+            Thread.sleep(10)  // Slight delay to avoid socket overflow
             index += chunkSize
         }
-        sendResponseToSocket("[END]")  // Signal the end of the message.
+        sendResponseToSocket("[END]")  // Signal the end of the message
     }
 
-    // Helper function to send data over the socket
     private fun sendResponseToSocket(chunk: String) {
         try {
             socket?.getOutputStream()?.let { outputStream ->
-                outputStream.write((chunk + "\n").toByteArray())
+                outputStream.write((chunk + "\n").toByteArray(Charsets.UTF_8))
                 outputStream.flush()
             }
             Log.d("AccessibilityService", "Chunk sent: $chunk")

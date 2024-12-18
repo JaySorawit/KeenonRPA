@@ -83,9 +83,10 @@ fun ConnectionScreen(
     onConnect: (String, String) -> Unit,
     onDisconnect: () -> Unit
 ) {
-    var ip by remember { mutableStateOf("") }
-    var port by remember { mutableStateOf("") }
+    var ip by remember { mutableStateOf("192.168.1.41") }
+    var port by remember { mutableStateOf("12345") }
     var connectionState by remember { mutableStateOf(isConnected) }
+    var showDialog by remember { mutableStateOf(false) } // State to control popup visibility
     val context = LocalContext.current
     val accessibilityManager =
         context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
@@ -138,6 +139,7 @@ fun ConnectionScreen(
                         onConnect(ip, port)
                     } else {
                         Log.e("ConnectionScreen", "Please fill in all fields!")
+                        showDialog = true // Show the popup dialog
                     }
                 },
                 modifier = Modifier.width(300.dp),
@@ -165,5 +167,19 @@ fun ConnectionScreen(
                 Text("Disable Accessibility Service")
             }
         }
+    }
+
+    // Show popup if showDialog is true
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("OK")
+                }
+            },
+            title = { Text("Error") },
+            text = { Text("Please fill in all fields!") }
+        )
     }
 }
