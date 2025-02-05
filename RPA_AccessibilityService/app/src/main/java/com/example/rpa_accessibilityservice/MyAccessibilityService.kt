@@ -96,6 +96,20 @@ class MyAccessibilityService : AccessibilityService() {
             }
 
             when (command) {
+                command.startsWith("tap:").toString() -> {
+                    val coordinates = command.removePrefix("tap:").split(",")
+                    if (coordinates.size == 2) {
+                        val x = coordinates[0].toIntOrNull()
+                        val y = coordinates[1].toIntOrNull()
+                        if (x != null && y != null) {
+                            performTap(x, y) // Perform the tap
+                        } else {
+                            sendResponse("Invalid coordinates: $command")
+                        }
+                    } else {
+                        sendResponse("Invalid tap command format: $command")
+                    }
+                }
                 "goHome", "goBack", "showRecents" -> performGlobalActionByCommand(command)
                 "swipeUp", "swipeDown", "swipeLeft", "swipeRight" -> performGestureByCommand(command)
                 "getFullUI" -> {
@@ -291,7 +305,7 @@ class MyAccessibilityService : AccessibilityService() {
             val node = queue.removeFirst()
 
             // check clickable ImageButton
-            if (node.className == "android.widget.ImageButton" && node.isClickable) {
+            if (node.className == "android.widget.ImageView" && node.isClickable) {
                 Log.d("AccessibilityService", "Found ImageButton, performing click...")
                 node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
@@ -333,6 +347,22 @@ class MyAccessibilityService : AccessibilityService() {
             "swipeLeft" -> performSwipeGesture(500, 1000, 100, 1000, 500L) // Swipe left
             "swipeRight" -> performSwipeGesture(100, 1000, 500, 1000, 500L) // Swipe right
             else -> sendResponse("Invalid gesture command: $command")
+        }
+    }
+
+    private fun performTap(x: Int, y: Int) {
+        try {
+            val command = "input tap $x $y"
+            val process = Runtime.getRuntime().exec(command)
+            process.waitFor()
+
+            if (process.exitValue() == 0) {
+                sendResponse("Tap gesture completed at x=$x, y=$y")
+            } else {
+                sendResponse("Tap gesture failed with exit code: ${process.exitValue()}")
+            }
+        } catch (e: Exception) {
+            sendResponse("Error executing tap command: ${e.message}")
         }
     }
 
