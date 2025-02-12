@@ -311,7 +311,7 @@ class MyAccessibilityService : AccessibilityService() {
 
                 // send FullHierarchy after
                 // val updatedHierarchy = buildFullHierarchy(rootInActiveWindow)
-                // sendResponse("Clicked Back Button.\nUpdated UI Hierarchy:\n$updatedHierarchy")
+                sendResponse("Clicked Back Button.")
                 return
             }
 
