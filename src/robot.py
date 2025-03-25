@@ -1,6 +1,5 @@
 import socket
 import time
-import threading
 from src import CONFIG
 
 class Robot:
@@ -24,9 +23,7 @@ class Robot:
                 self.client_socket, addr = self.server_socket.accept()
                 print(f"Connected to Android device at {addr}")
                 print("client:", self.client_socket)
-                # ใช้ threading เพื่อรองรับหลาย connection
-                #threading.Thread(target=self._handle_client, args=(client_socket,), daemon=True).start()
-                # self.handle_client(self.client_socket)
+                
             except Exception as e:
                 print(f"Error in connection: {e}")
 
@@ -47,7 +44,7 @@ class Robot:
         return ''.join(full_response)
     
     def send_command(self, command):
-        # commands = ["goHome, Peanut App", "checkStatus",]  # Predefined commands
+        
         try:
             print(f"Sending command: {command}")
             self.client_socket.sendall((command + '\n').encode())
@@ -56,6 +53,8 @@ class Robot:
                 print("Waiting for full response...")
                 response = self.receive_large_response()
                 print("Full Response Received:\n", response)
+                return response
+
             else:  # Handle regular commands
                 response = self.client_socket.recv(4096).decode('utf-8')
                 if not response:

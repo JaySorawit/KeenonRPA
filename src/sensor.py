@@ -29,18 +29,7 @@ class Sensor:
             print(f"Measurement error: {e}")
     
     def read_data(self):
-        # try:
-        #     self.client.connect()
-        #     result = self.client.read_holding_registers(0, 10)
-        #     self.client.close()
-        #     if result.isError():
-        #         print("Failed to read data.")
-        #         return None
-        #     return result.registers[0]  # Assume first register holds dust level
-        # except Exception as e:
-        #     print(f"Error reading data: {e}")
-        #     return None
-        
+
         try:
             # ???????????? Modbus TCP server
             self.client.connect()
@@ -49,23 +38,34 @@ class Sensor:
             record_count = self.client.read_holding_registers(address =40024-40001,count=1)
             self.client.write_register(40025-40001,record_count.registers[0]-1)
 
-
             # ?????????? register ??????? 30xxx ?????????????
             # ??? `self.client.read_holding_registers` ???????????????????????????????????????
             register_address = 30001-30001
             response = self.client.read_input_registers(register_address, count=100)
-
-            # ?????????????????????????????
+            
             if response.isError():
+                
                 print("Error reading record.")
             else:
+                # data = {
+                #     'measurement_datetime': measurement_time.isoformat(),
+                #     'room': room,
+                #     'area': area,
+                #     'location_name': location,
+                #     'count': count,
+                #     'um01': um_values['um01'],
+                #     'um03': um_values['um03'],
+                #     'um05': um_values['um05'],
+                #     'running_state': random.randint(0, 1),
+                #     'alarm_high': 0,
+                # }
                 
                 print(f"Record values: {response.registers[9]}")
                 print(f"Record values: {response.registers}")
 
             # ???????????????
             self.client.close()
-            return response.registers[9]
+            return data
 
         except Exception as e:
             print(f"Error reading data: {e}")

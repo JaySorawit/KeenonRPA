@@ -1,4 +1,4 @@
-from src import CONFIG, Database, Robot, Sensor
+from src import CONFIG, Database, Robot, Sensor, DustLogger
 import time
 import random
 
@@ -30,6 +30,7 @@ def main():
     robot = Robot()
     sensor = Sensor()
     db = Database()
+    logger = DustLogger()
     
     max_retries = CONFIG["MAX_RETRIES"]
     ucl_limit = CONFIG["UCL_LIMIT"]
@@ -82,7 +83,9 @@ def main():
             except Exception as e:
                 print(f"Database error: {e}. Storing offline.")
                 offline_measurements.append((point, dust_level, count))
-                
+
+            #log Data ทุกรอบที่วัด
+            logger.save_log(dust_level,count)
             count += 1
             time.sleep(2)
         
